@@ -22,9 +22,9 @@
 #include <polymake/perl/macros.h>
 #include <polymake/perl/wrappers.h>
 
-#include "generated/additional_includes.h"
-
 #pragma clang diagnostic pop
+
+#include "generated/forwards.cpp"
 
 using namespace polymake;
 
@@ -259,7 +259,7 @@ JULIA_CPP_MODULE_BEGIN(registry)
   polymake.method("to_value",to_value<pm::perl::Object>);
 
 
-  #include "generated/additional_wrappers.cpp"
+  #include "generated/function_calls.cpp"
 
 //   polymake.method("cube",[](pm::perl::Value a1, pm::perl::Value a2, pm::perl::Value a3, pm::perl::OptionSet opt){ return polymake::polytope::cube<pm::Rational >(a1,a2,a3,opt); });
 

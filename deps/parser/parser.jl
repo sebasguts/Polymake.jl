@@ -28,8 +28,8 @@ function parse_cpperl_file(filename::String)
         argument_names = current_item["args"][nr_tp+1:end]
         templates_types = join(templates,",")
         templates_name = join(templates,"_")
-        if templates_name != ""
-            template_func = "<"*templates_name*" >"
+        if templates_types != ""
+            template_func = "<"*templates_types*" >"
         else
             template_func = ""
         end
@@ -79,31 +79,46 @@ end
 
 wrapper_files = filter(y->contains(y,"wrap-"),filter(x->contains(x,".cpperl"), readdir("/home/sebastian/Software/polymake_devel_git/apps/polytope/cpperl")))
 
-all_include_statements = []
+filenames_list = []
 
-open("../src/generated/additional_wrappers.cpp","w") do wrappers
-
-    for filename in wrapper_files[1:10]
-
-        filename = "/home/sebastian/Software/polymake_devel_git/apps/polytope/cpperl/$filename"
-
-        result = parse_cpperl_file(filename)
-
-        append!(all_include_statements,result[1])
+open("../src/generated/function_calls.cpp", "w") do function_calls
+open("../src/generated/forwards.cpp","w") do forwards
+println(forwards,"namespace polymake{ namespace polytope{")
+for filename in wrapper_files
+    wrapper_name = replace(filename,".cpperl","")
+    filename_cpp = "additional_wrappers_"*wrapper_name*".cpp"
+    push!(filenames_list,filename_cpp)
+    open("../src/generated/"*filename_cpp,"w") do wrappers
+        filename_origin = "/home/sebastian/Software/polymake_devel_git/apps/polytope/cpperl/$filename"
+        result = parse_cpperl_file(filename_origin)
+        println(wrappers,"#define POLYMAKE_NO_EMBEDDED_RULES 1")
+        for current_line in result[1]
+            println(wrappers,current_line)
+        end
         
+        println(wrappers,"#include \"jlcxx/jlcxx.hpp\"")
+        println(wrappers,"namespace polymake{ namespace polytope{ ")
+        
+        wrapper_name = replace(wrapper_name,"-","_")
+        println(wrappers,"void adder_$wrapper_name(jlcxx::Module& polymake){")
+
         for current_line in result[2]
             println(wrappers,current_line)
         end
+        println(wrappers,"}")
+        println(wrappers,"}}")
+        println(function_calls,"polymake::polytope::adder_$wrapper_name(polymake);")
+        println(forwards,"extern void adder_$wrapper_name(jlcxx::Module&);")
     end
-
+end
+println(forwards,"}}")
+end
 end
 
-all_include_statements = unique(all_include_statements)
-
-open("../src/generated/additional_includes.h","w") do headers
-    for current_line in all_include_statements
-        println(headers,current_line)
+open("../src/generated/CMakeLists.txt","w") do files
+    print(files,"set(GENERATED_SRCS \"")
+    for current_line in filenames_list
+        print(files,"\${CMAKE_CURRENT_SOURCE_DIR}/"*current_line*" ")
     end
-    println(headers, "using namespace pm;")
-    println(headers, "using namespace polymake::polytope;")
+    print(files,"\" PARENT_SCOPE)")
 end
