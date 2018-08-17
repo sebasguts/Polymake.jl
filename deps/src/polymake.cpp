@@ -3,6 +3,8 @@
 
 #include "jlcxx/jlcxx.hpp"
 
+#define POLYMAKE_NO_EMBEDDED_RULES 1
+
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wlogical-op-parentheses"
 #pragma clang diagnostic ignored "-Wshift-op-parentheses"
@@ -20,7 +22,7 @@
 #include <polymake/perl/macros.h>
 #include <polymake/perl/wrappers.h>
 
-// #include "/home/sebastian/Software/polymake_devel_git/apps/polytope/include/cube.h"
+#include "generated/additional_includes.h"
 
 #pragma clang diagnostic pop
 
@@ -254,8 +256,12 @@ JULIA_CPP_MODULE_BEGIN(registry)
   polymake.method("to_value",to_value<pm::Matrix<pm::Integer> >);
   polymake.method("to_value",to_value<pm::Matrix<pm::Rational> >);
   polymake.method("to_value",to_value<pm::perl::OptionSet>);
+  polymake.method("to_value",to_value<pm::perl::Object>);
 
-//   polymake.method("cube",[](pm::perl::Value a1, pm::perl::Value a2, pm::perl::Value a3, pm::perl::OptionSet opt){ return polymake::polytope::cube<pm::QuadraticExtension<pm::Rational> >(a1,a2,a3,opt); });
+
+  #include "generated/additional_wrappers.cpp"
+
+//   polymake.method("cube",[](pm::perl::Value a1, pm::perl::Value a2, pm::perl::Value a3, pm::perl::OptionSet opt){ return polymake::polytope::cube<pm::Rational >(a1,a2,a3,opt); });
 
 
 JULIA_CPP_MODULE_END

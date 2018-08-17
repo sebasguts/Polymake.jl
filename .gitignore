@@ -1,3 +1,4 @@
+deps/src/generated/*
 *.jl.cov
 *.jl.*.cov
 *.jl.mem

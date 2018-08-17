@@ -6,29 +6,28 @@ module Polymake
     wrap_module(pm_dir,Polymake)
 end
 
-import .Polymake
+import Base: promote_rule
+
+import .Polymake: pm_Integer, pm_Rational, pm_Vector, pm_Matrix, exists, new_pm_Integer,
+                 numerator, denominator, application
 
 function __init__()
     Polymake.init()
     Polymake.application("polytope")
 end
 
-const SmallObject = Union{Polymake.pm_Integer,
-                          Polymake.pm_Rational,
-                          Polymake.pm_Matrix,
-                          Polymake.pm_Vector}
+SmallObject = Union{pm_Integer,
+                    pm_Rational,
+                    pm_Matrix,
+                    pm_Vector}
 
-const pm_Integer = Polymake.pm_Integer
-const pm_Rational = Polymake.pm_Rational
-const pm_Vector = Polymake.pm_Vector
-const pm_Matrix = Polymake.pm_Matrix
+BuiltIn = Union{Int64,
+                Int32}
 
-const exists = Polymake.exists
-const new_pm_Integer = Polymake.new_pm_Integer
-const numerator = Polymake.numerator
-const denominator = Polymake.denominator
+const to_value = Polymake.to_value
 
-const application = Polymake.application
+promote_rule(::Type{Polymake.pm_perl_Value},::Type{SmallObject}) = Polymake.pm_perl_Value
+promote_rule(::Type{Polymake.pm_perl_Value},::Type{BuiltIn}) = Polymake.pm_perl_Value
 
 include("functions.jl")
 include("convert.jl")
