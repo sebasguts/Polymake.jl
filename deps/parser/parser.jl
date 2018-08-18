@@ -81,14 +81,14 @@ wrapper_files = filter(y->contains(y,"wrap-"),filter(x->contains(x,".cpperl"), r
 
 filenames_list = []
 
-open("../src/generated/function_calls.cpp", "w") do function_calls
-open("../src/generated/forwards.cpp","w") do forwards
+open( abspath( "src/generated") * "/function_calls.cpp", "w") do function_calls
+open( abspath( "src/generated") * "/forwards.cpp","w") do forwards
 println(forwards,"namespace polymake{ namespace polytope{")
 for filename in wrapper_files
     wrapper_name = replace(filename,".cpperl","")
     filename_cpp = "additional_wrappers_"*wrapper_name*".cpp"
     push!(filenames_list,filename_cpp)
-    open("../src/generated/"*filename_cpp,"w") do wrappers
+    open( abspath( "src/generated") * "/" * filename_cpp,"w") do wrappers
         filename_origin = "/home/sebastian/Software/polymake_devel_git/apps/polytope/cpperl/$filename"
         result = parse_cpperl_file(filename_origin)
         println(wrappers,"#define POLYMAKE_NO_EMBEDDED_RULES 1")
@@ -115,7 +115,7 @@ println(forwards,"}}")
 end
 end
 
-open("../src/generated/CMakeLists.txt","w") do files
+open( abspath( "src/generated") * "/" * "CMakeLists.txt", "w") do files
     print(files,"set(GENERATED_SRCS \"")
     for current_line in filenames_list
         print(files,"\${CMAKE_CURRENT_SOURCE_DIR}/"*current_line*" ")

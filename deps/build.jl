@@ -50,6 +50,7 @@ pm_cflags = chomp(readstring(`$(ENV["POLYMAKE_CONFIG"]) --cflags`))
 pm_ldflags = chomp(readstring(`$(ENV["POLYMAKE_CONFIG"]) --ldflags`))
 pm_libraries = chomp(readstring(`$(ENV["POLYMAKE_CONFIG"]) --libs`))
 
+include(Pkg.dir(@__DIR__,"parser","parser.jl"))
 
 jlcxx_cmake_dir = Pkg.dir("CxxWrap", "deps", "usr", "lib", "cmake", "JlCxx")
 
