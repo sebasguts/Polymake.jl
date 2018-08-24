@@ -84,6 +84,10 @@ void initialize_polymake(){
     std::cout << data.main_polymake_session->greeting() << std::endl;
 }
 
+pm::perl::PropertyValue call_polymake_function(std::string func, pm::perl::Array args){
+    return polymake::call_function(func,pm::perl::unroll(args));
+}
+
 polymake::perl::Object call_func_0args(std::string func) {
     return polymake::call_function(func);
 }
@@ -219,6 +223,12 @@ JULIA_CPP_MODULE_BEGIN(registry)
             p.take(s) << T;
         });
     });
+
+  polymake.add_type<pm::perl::Array>("pm_perl_Array")
+    .constructor<int32_t>()
+    .constructor<int64_t>();
+  polymake.method("get_element",[](pm::perl::Array x, int64_t i){ return x[i-1]; } );
+  polymake.method("set_element",[](pm::perl::Array x, int64_t i, pm::perl::Value y){ x[i-1] = y; });
 
   polymake.method("init", &initialize_polymake);
   polymake.method("call_func_0args",&call_func_0args);
