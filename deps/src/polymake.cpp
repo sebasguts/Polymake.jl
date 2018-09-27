@@ -2,6 +2,7 @@
 #include <iostream>
 
 #include "jlcxx/jlcxx.hpp"
+#include "jlcxx/array.hpp"
 
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wlogical-op-parentheses"
@@ -78,6 +79,73 @@ class PropertyValueHelper : public pm::perl::PropertyValue {
 
 }
 
+// Julia static types
+
+static auto type_map_translator = new std::list<std::pair<std::string,jl_value_t**> >();
+
+#define CreatePolymakeTypeVar(type) static jl_value_t* POLYMAKETYPE_ ## type
+
+CreatePolymakeTypeVar(pm_perl_PropertyValue);
+CreatePolymakeTypeVar(pm_perl_OptionSet);
+CreatePolymakeTypeVar(pm_perl_Value);
+CreatePolymakeTypeVar(pm_perl_Object);
+CreatePolymakeTypeVar(pm_Integer);
+CreatePolymakeTypeVar(pm_Rational);
+CreatePolymakeTypeVar(pm_Matrix_pm_Integer);
+CreatePolymakeTypeVar(pm_Matrix_pm_Rational);
+CreatePolymakeTypeVar(pm_Vector_pm_Integer);
+CreatePolymakeTypeVar(pm_Vector_pm_Rational);
+CreatePolymakeTypeVar(pm_Set);
+
+void insert_type_in_map(std::string&& ptr_name, jl_value_t** var_space){
+    type_map_translator->push_back(std::make_pair(ptr_name,var_space));
+}
+
+void set_julia_types()
+{
+    for(auto i = type_map_translator->begin();i!=type_map_translator->end();i++){
+        jl_value_t* current_type = jl_eval_string( ("PolymakeWrap.Polymake." + i->first).c_str() );
+        memcpy(i->second, &current_type, sizeof(jl_value_t*));
+    }
+}
+
+void* get_ptr_from_cxxwrap_obj(jl_value_t* obj){
+    return *reinterpret_cast<void**>(obj);
+}
+
+// void* get_ptr_from_cxxwrap_obj(jl_value_t* obj){
+//     return jl_unbox_voidpointer(jl_get_field(obj,"cpp_object"));
+// }
+
+#define TO_POLYMAKE_FUNCTION(juliatype, ctype) \
+        if(jl_subtype(reinterpret_cast<jl_value_t*>(current_type), POLYMAKETYPE_ ## juliatype )){ \
+            function << *reinterpret_cast< ctype *>(get_ptr_from_cxxwrap_obj(current_element)); \
+        }
+
+pm::perl::Object polymake_call_function(std::string function_name, jlcxx::ArrayRef<jl_value_t*> arguments)
+{
+    size_t argument_list = arguments.size();
+    auto function = prepare_call_function(function_name);
+    for(size_t i = 0;i<argument_list;i++){
+        jl_value_t* current_element = reinterpret_cast<jl_value_t*>(arguments[i]);
+        jl_datatype_t* current_type = reinterpret_cast<jl_datatype_t*>(jl_typeof(current_element));
+        if(current_type == jl_int64_type)
+            function << jl_unbox_int64(current_element);
+        if(current_type == jl_bool_type)
+            function << jl_unbox_bool(current_element);
+        TO_POLYMAKE_FUNCTION( pm_perl_PropertyValue, pm::perl::PropertyValue )
+        TO_POLYMAKE_FUNCTION( pm_perl_OptionSet, pm::perl::OptionSet )
+        TO_POLYMAKE_FUNCTION( pm_perl_Object, pm::perl::Object )
+        TO_POLYMAKE_FUNCTION( pm_Integer, pm::Integer )
+        TO_POLYMAKE_FUNCTION( pm_Rational, pm::Rational )
+        TO_POLYMAKE_FUNCTION( pm_Matrix_pm_Integer, pm::Matrix<pm::Integer> )
+        TO_POLYMAKE_FUNCTION( pm_Matrix_pm_Rational, pm::Matrix<pm::Rational> )
+        TO_POLYMAKE_FUNCTION( pm_Vector_pm_Integer, pm::Vector<pm::Integer> )
+        TO_POLYMAKE_FUNCTION( pm_Vector_pm_Rational, pm::Vector<pm::Rational> )
+    }
+    return function();
+}
+
 
 struct Polymake_Data {
    polymake::Main *main_polymake_session;
@@ -87,6 +155,7 @@ struct Polymake_Data {
 static Polymake_Data data;
 
 void initialize_polymake(){
+    set_julia_types();
     data.main_polymake_session = new polymake::Main;
     data.main_polymake_scope = new polymake::perl::Scope(data.main_polymake_session->newScope());
     std::cout << data.main_polymake_session->greeting() << std::endl;
@@ -182,12 +251,20 @@ pm::perl::Value to_value(T obj){
     return val;
 }
 
+#define POLYMAKE_INSERT_TYPE_IN_MAP(type) insert_type_in_map(#type , &POLYMAKETYPE_ ## type )
+#define POLYMAKE_INSERT_TYPE_IN_MAP_SINGLE_TEMPLATE(outer,inner) \
+     insert_type_in_map( std::string( #outer ) + "{PolymakeWrap.Polymake." + #inner + "}"  , &POLYMAKETYPE_ ## outer ## _ ## inner  )
+
 JULIA_CPP_MODULE_BEGIN(registry)
   jlcxx::Module& polymake = registry.create_module("Polymake");
 
   polymake.add_type<pm::perl::PropertyValue>("pm_perl_PropertyValue");
+  POLYMAKE_INSERT_TYPE_IN_MAP(pm_perl_PropertyValue);
   polymake.add_type<pm::perl::OptionSet>("pm_perl_OptionSet");
+  POLYMAKE_INSERT_TYPE_IN_MAP(pm_perl_OptionSet);
+
   polymake.add_type<pm::perl::Value>("pm_perl_Value");
+  POLYMAKE_INSERT_TYPE_IN_MAP(pm_perl_Value);
 
   polymake.add_type<pm::perl::Object>("pm_perl_Object")
     .constructor<const std::string&>()
@@ -196,10 +273,12 @@ JULIA_CPP_MODULE_BEGIN(registry)
     .method("properties",[](pm::perl::Object p){ std::string x = p.call_method("properties"); 
                                                  return x; 
                                                 });
+  POLYMAKE_INSERT_TYPE_IN_MAP(pm_perl_Object);
 
   polymake.add_type<pm::Integer>("pm_Integer")
     .constructor<int32_t>()
     .constructor<int64_t>();
+  POLYMAKE_INSERT_TYPE_IN_MAP(pm_Integer);
   polymake.method("new_pm_Integer",new_integer_from_bigint);
 
   polymake.add_type<pm::Rational>("pm_Rational")
@@ -208,6 +287,7 @@ JULIA_CPP_MODULE_BEGIN(registry)
     .template constructor<pm::Integer, pm::Integer>()
     .method("numerator",[](pm::Rational r){ return pm::Integer(numerator(r)); })
     .method("denominator",[](pm::Rational r){ return pm::Integer(denominator(r)); });
+  POLYMAKE_INSERT_TYPE_IN_MAP(pm_Rational);
 
   polymake.add_type<jlcxx::Parametric<jlcxx::TypeVar<1>>>("pm_Matrix")
     .apply<pm::Matrix<pm::Integer>, pm::Matrix<pm::Rational>>([](auto wrapped){
@@ -225,6 +305,8 @@ JULIA_CPP_MODULE_BEGIN(registry)
             p.take(s) << T;
         });
     });
+  POLYMAKE_INSERT_TYPE_IN_MAP_SINGLE_TEMPLATE(pm_Matrix,pm_Integer);
+  POLYMAKE_INSERT_TYPE_IN_MAP_SINGLE_TEMPLATE(pm_Matrix,pm_Rational);
 
   polymake.add_type<jlcxx::Parametric<jlcxx::TypeVar<1>>>("pm_Vector")
     .apply<pm::Vector<pm::Integer>, pm::Vector<pm::Rational>>([](auto wrapped){
@@ -241,8 +323,12 @@ JULIA_CPP_MODULE_BEGIN(registry)
             p.take(s) << T;
         });
     });
+  POLYMAKE_INSERT_TYPE_IN_MAP_SINGLE_TEMPLATE(pm_Vector,pm_Integer);
+  POLYMAKE_INSERT_TYPE_IN_MAP_SINGLE_TEMPLATE(pm_Vector,pm_Rational);
 
   polymake.add_type<pm::Set<int64_t> >("pm_Set");
+  POLYMAKE_INSERT_TYPE_IN_MAP(pm_Set);
+
   polymake.method("new_set_int64", new_set_int64);
 
   polymake.method("init", &initialize_polymake);
@@ -283,6 +369,8 @@ JULIA_CPP_MODULE_BEGIN(registry)
   polymake.method("to_value",to_value<pm::Matrix<pm::Rational> >);
   polymake.method("to_value",to_value<pm::Set<int64_t> >);
   polymake.method("to_value",to_value<pm::perl::OptionSet>);
+
+  polymake.method("call_function",&polymake_call_function);
 
 //   polymake.method("cube",[](pm::perl::Value a1, pm::perl::Value a2, pm::perl::Value a3, pm::perl::OptionSet opt){ return polymake::polytope::cube<pm::QuadraticExtension<pm::Rational> >(a1,a2,a3,opt); });
 
