@@ -119,29 +119,43 @@ void* get_ptr_from_cxxwrap_obj(jl_value_t* obj){
 
 #define TO_POLYMAKE_FUNCTION(juliatype, ctype) \
         if(jl_subtype(reinterpret_cast<jl_value_t*>(current_type), POLYMAKETYPE_ ## juliatype )){ \
-            function << *reinterpret_cast< ctype *>(get_ptr_from_cxxwrap_obj(current_element)); \
+            function << *reinterpret_cast< ctype *>(get_ptr_from_cxxwrap_obj(argument)); \
         }
+
+template<typename T>
+void polymake_call_function_feed_argument(T& function, jl_value_t* argument){
+    jl_datatype_t* current_type = reinterpret_cast<jl_datatype_t*>(jl_typeof(argument));
+    if(current_type == jl_int64_type)
+        function << jl_unbox_int64(argument);
+    if(current_type == jl_bool_type)
+        function << jl_unbox_bool(argument);
+    TO_POLYMAKE_FUNCTION( pm_perl_PropertyValue, pm::perl::PropertyValue )
+    TO_POLYMAKE_FUNCTION( pm_perl_OptionSet, pm::perl::OptionSet )
+    TO_POLYMAKE_FUNCTION( pm_perl_Object, pm::perl::Object )
+    TO_POLYMAKE_FUNCTION( pm_Integer, pm::Integer )
+    TO_POLYMAKE_FUNCTION( pm_Rational, pm::Rational )
+    TO_POLYMAKE_FUNCTION( pm_Matrix_pm_Integer, pm::Matrix<pm::Integer> )
+    TO_POLYMAKE_FUNCTION( pm_Matrix_pm_Rational, pm::Matrix<pm::Rational> )
+    TO_POLYMAKE_FUNCTION( pm_Vector_pm_Integer, pm::Vector<pm::Integer> )
+    TO_POLYMAKE_FUNCTION( pm_Vector_pm_Rational, pm::Vector<pm::Rational> )
+}
 
 pm::perl::Object polymake_call_function(std::string function_name, jlcxx::ArrayRef<jl_value_t*> arguments)
 {
     size_t argument_list = arguments.size();
     auto function = prepare_call_function(function_name);
     for(size_t i = 0;i<argument_list;i++){
-        jl_value_t* current_element = reinterpret_cast<jl_value_t*>(arguments[i]);
-        jl_datatype_t* current_type = reinterpret_cast<jl_datatype_t*>(jl_typeof(current_element));
-        if(current_type == jl_int64_type)
-            function << jl_unbox_int64(current_element);
-        if(current_type == jl_bool_type)
-            function << jl_unbox_bool(current_element);
-        TO_POLYMAKE_FUNCTION( pm_perl_PropertyValue, pm::perl::PropertyValue )
-        TO_POLYMAKE_FUNCTION( pm_perl_OptionSet, pm::perl::OptionSet )
-        TO_POLYMAKE_FUNCTION( pm_perl_Object, pm::perl::Object )
-        TO_POLYMAKE_FUNCTION( pm_Integer, pm::Integer )
-        TO_POLYMAKE_FUNCTION( pm_Rational, pm::Rational )
-        TO_POLYMAKE_FUNCTION( pm_Matrix_pm_Integer, pm::Matrix<pm::Integer> )
-        TO_POLYMAKE_FUNCTION( pm_Matrix_pm_Rational, pm::Matrix<pm::Rational> )
-        TO_POLYMAKE_FUNCTION( pm_Vector_pm_Integer, pm::Vector<pm::Integer> )
-        TO_POLYMAKE_FUNCTION( pm_Vector_pm_Rational, pm::Vector<pm::Rational> )
+        polymake_call_function_feed_argument(function, arguments[i]);
+    }
+    return function();
+}
+
+pm::perl::Object polymake_call_method(std::string function_name, pm::perl::Object object, jlcxx::ArrayRef<jl_value_t*> arguments)
+{
+    size_t argument_list = arguments.size();
+    auto function = object.prepare_call_method(function_name);
+    for(size_t i = 0;i<argument_list;i++){
+        polymake_call_function_feed_argument(function, arguments[i]);
     }
     return function();
 }
@@ -371,6 +385,7 @@ JULIA_CPP_MODULE_BEGIN(registry)
   polymake.method("to_value",to_value<pm::perl::OptionSet>);
 
   polymake.method("call_function",&polymake_call_function);
+  polymake.method("call_function",&polymake_call_method);
 
 //   polymake.method("cube",[](pm::perl::Value a1, pm::perl::Value a2, pm::perl::Value a3, pm::perl::OptionSet opt){ return polymake::polytope::cube<pm::QuadraticExtension<pm::Rational> >(a1,a2,a3,opt); });
 
