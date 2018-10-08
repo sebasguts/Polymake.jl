@@ -64,3 +64,8 @@ end
 function Base.show(io::IO,obj::SmallObject)
     print(io, Polymake.show_small_obj(obj))
 end
+
+function Base.show(io::IO,obj::Polymake.pm_perl_PropertyValue)
+    converted_obj = typename_func(Polymake.typeinfo_string(obj))(obj)
+    print(io, Polymake.properties(converted_obj))
+end

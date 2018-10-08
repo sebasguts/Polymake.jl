@@ -165,3 +165,5 @@ end
 
 convert(::Type{Array{BigInt,1}},vector::Polymake.pm_perl_PropertyValue) = convert_vector_integer(vector)
 convert(::Type{Array{BigInt,1}},vector::Polymake.pm_Vector{Polymake.pm_Integer}) = convert_vector_integer(vector)
+
+convert(::Type{Polymake.pm_perl_Object},object::Polymake.pm_perl_PropertyValue) = Polymake.to_perl_object(object)
