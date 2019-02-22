@@ -33,6 +33,8 @@ function $julia_name(args...; template_parameters::Array{String,1}=String[], kee
     end
 end
 
+export $julia_name
+
 """
 end
 
@@ -52,6 +54,8 @@ function $julia_name(dispatch_object,args...; keep_PropertyValue=false, call_as_
         return convert_from_property_value(return_value)
     end
 end
+
+export $julia_name
 
 """
 end
@@ -77,10 +81,15 @@ function parse_definition(method_dict::Dict, app_name::String, uniqueness_checke
 
 end
 
-function parse_app_definitions(filename::String,outputfileposition::String,include_file::String,additional_json_files_path::String)
+function parse_app_definitions(filename::String,outputfileposition::String,include_file::String,additional_json_files_path::String,appname_dict::Dict{Symbol,Symbol})
     println("Parsing "*filename)
     parsed_dict = JSON.Parser.parsefile(filename)
     app_name = parsed_dict["app"]
+    if !haskey(appname_dict,Symbol(app_name))
+        @warn "Application $app_name not found in translator"
+        appname_dict[Symbol(app_name)] = Symbol(app_name)
+    end
+    app_name_module = string(appname_dict[Symbol(app_name)])
     additional_json_file_name = abspath( joinpath( additional_json_files_path, app_name*".json" ) )
     if isfile(additional_json_file_name)
         additional_dict = JSON.Parser.parsefile(additional_json_file_name)
@@ -92,7 +101,7 @@ function parse_app_definitions(filename::String,outputfileposition::String,inclu
         end
     end
     return_string = """
-module $app_name
+module $app_name_module
 
 import ..internal_call_function, ..internal_call_method,
        ..internal_call_function_void, ..internal_call_method_void,
@@ -111,7 +120,7 @@ import ..internal_call_function, ..internal_call_method,
         end
         return_string = return_string * return_value
     end
-    return_string = return_string * "\n\nend\nexport $app_name\n"
+    return_string = return_string * "\n\nend\nexport $app_name_module\n"
     open(abspath(joinpath(outputfileposition, app_name * ".jl" )),"w") do outputfile
         print(outputfile,return_string)
     end
@@ -120,7 +129,42 @@ import ..internal_call_function, ..internal_call_method,
     end
 end
 
+function create_compat_module(outputfolder::String,include_file::String,appname_dict::Dict{Symbol,Symbol})
+    header ="""
+module PolymakeCompat
+
+"""
+    footer ="""
+
+end
+
+"""
+    open(abspath(joinpath(outputfolder,"PolymakeCompat.jl")),"w") do outputfile
+        print(outputfile, header)
+        for (polymake_app,julia_module) in appname_dict
+            print(outputfile,"""
+import ..$julia_module
+
+const $polymake_app = $julia_module
+
+export $polymake_app
+
+""")
+        end
+        print(outputfile,footer)
+    end
+
+    open(abspath(include_file),"a") do outputfile
+        print(outputfile,"include(\"PolymakeCompat.jl\")\n")
+    end
+
+end
+
+## Creates appname_dict
+include( joinpath(@__DIR__,"app_setup.jl" ) )
 
 for current_file in filenames_list
-    parse_app_definitions(joinpath(jsonfolder,current_file), outputfolder, include_file,additional_json_files_path)
+    parse_app_definitions(joinpath(jsonfolder,current_file), outputfolder, include_file,additional_json_files_path,appname_dict)
 end
+
+create_compat_module(outputfolder,include_file,appname_dict)
